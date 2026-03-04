@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { loadData, saveData } from "./supabase.js";
 
-/* ─── DEFAULT ITINERARY ─── */
+/* ─── DATA ─── */
 const DEFAULT_ITINERARY = [
   { id: 1, type: "stay", icon: "🏨", title: "Bangkok — Arrivée", subtitle: "PAAK Hotel Suvarnabhumi", dates: "12 – 13 Nov", nights: "1 nuit", details: "Repos après le vol. Profitez de l'hôtel près de l'aéroport.", color: "#E8A838", editable: true },
   { id: 2, type: "travel", icon: "🚌", title: "Bangkok → Koh Kood", subtitle: "Bus + Bateau via Trat", dates: "13 Nov", duration: "7h (06:00 → 13:00)", details: "Départ 06h00 de Bangkok en bus jusqu'à Trat, puis bateau pour Koh Kood. Arrivée 13h00.", color: "#3B8686", editable: true },
@@ -31,27 +30,38 @@ const PLANNING_DAYS = [
 const DEFAULT_RATES = { USD: 1.08, THB: 37.5 };
 const fmt = (n) => n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/* ═══════════════════════ MAIN APP ═══════════════════════ */
+async function loadStorage(key, fb) { try { const r = await window.storage.get(key); return r ? JSON.parse(r.value) : fb; } catch { return fb; } }
+async function saveStorage(key, v) { try { await window.storage.set(key, JSON.stringify(v)); } catch {} }
+
+/* ─── BACK BUTTON ─── */
+function Back({ onClick, label }) {
+  return (
+    <button onClick={onClick} style={{
+      display: "flex", alignItems: "center", gap: 6, border: "1px solid #f0c24d44",
+      background: "#f0c24d15", color: "#f0c24d", fontSize: 14, fontWeight: 700,
+      cursor: "pointer", padding: "10px 18px", borderRadius: 12, margin: "0 16px 14px",
+      WebkitTapHighlightColor: "transparent",
+    }}>
+      <span style={{ fontSize: 20, lineHeight: 1 }}>‹</span> {label}
+    </button>
+  );
+}
+
+/* ═══════════════════ MAIN ═══════════════════ */
 export default function App() {
   const [tab, setTab] = useState("itinerary");
   const [itinerary, setItinerary] = useState(DEFAULT_ITINERARY);
   const [plans, setPlans] = useState({});
   const [loaded, setLoaded] = useState(false);
 
-  // Load from Supabase on mount
-  useEffect(() => {
-    (async () => {
-      const savedIt = await loadData("thai-itinerary", DEFAULT_ITINERARY);
-      const savedPl = await loadData("thai-plans", {});
-      setItinerary(savedIt);
-      setPlans(savedPl);
-      setLoaded(true);
-    })();
-  }, []);
+  useEffect(() => { (async () => {
+    setItinerary(await loadStorage("thai-itinerary", DEFAULT_ITINERARY));
+    setPlans(await loadStorage("thai-plans", {}));
+    setLoaded(true);
+  })(); }, []);
 
-  // Save to Supabase on changes
-  useEffect(() => { if (loaded) saveData("thai-itinerary", itinerary); }, [itinerary, loaded]);
-  useEffect(() => { if (loaded) saveData("thai-plans", plans); }, [plans, loaded]);
+  useEffect(() => { if (loaded) saveStorage("thai-itinerary", itinerary); }, [itinerary, loaded]);
+  useEffect(() => { if (loaded) saveStorage("thai-plans", plans); }, [plans, loaded]);
 
   const tabs = [
     { key: "itinerary", icon: "📍", label: "Parcours" },
@@ -61,294 +71,360 @@ export default function App() {
   ];
 
   return (
-    <div style={S.shell}>
-      <div style={{ height: "env(safe-area-inset-top, 10px)", background: "#0c1e2b" }} />
-      <header style={S.header}>
-        <span style={{ fontSize: 34 }}>🇹🇭</span>
-        <div style={{ flex: 1 }}>
-          <h1 style={S.headerTitle}>Thaïlande 2026</h1>
-          <p style={S.headerSub}>12 – 25 Novembre</p>
+    <div style={{
+      maxWidth: 430, margin: "0 auto", height: "100dvh", display: "flex", flexDirection: "column",
+      background: "#0c1e2b", fontFamily: "-apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif",
+      color: "#d4e4ed", overflow: "hidden", position: "relative",
+    }}>
+      {/* iOS status bar space */}
+      <div style={{ minHeight: "env(safe-area-inset-top, 10px)", background: "#0a1820", flexShrink: 0 }} />
+
+      {/* Header */}
+      <header style={{
+        display: "flex", alignItems: "center", gap: 12, padding: "12px 18px",
+        background: "#0a1820", borderBottom: "1px solid #1a3048", flexShrink: 0,
+      }}>
+        <span style={{ fontSize: 30 }}>🇹🇭</span>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#f0c24d" }}>Thaïlande 2026</h1>
+          <p style={{ margin: 0, fontSize: 11, color: "#5e879e", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>12 – 25 Novembre</p>
         </div>
       </header>
-      <main style={S.main}>
+
+      {/* Content — scrollable */}
+      <main style={{ flex: 1, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", paddingTop: 12 }}>
         {tab === "itinerary" && <Itinerary items={itinerary} setItems={setItinerary} />}
         {tab === "planning" && <Planning plans={plans} setPlans={setPlans} />}
         {tab === "currency" && <Currency />}
         {tab === "chat" && <Chat />}
       </main>
-      <nav style={S.nav}>
+
+      {/* Bottom Nav — always visible */}
+      <nav style={{
+        display: "flex", justifyContent: "space-around", padding: "8px 6px 4px",
+        background: "#070f16", borderTop: "1px solid #1a3048", flexShrink: 0,
+      }}>
         {tabs.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            style={{ ...S.navBtn, color: tab === t.key ? "#f0c24d" : "#7a9aad", background: tab === t.key ? "rgba(240,194,77,0.08)" : "transparent" }}>
-            <span style={{ fontSize: 20 }}>{t.icon}</span>
-            <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 0.6 }}>{t.label}</span>
+          <button key={t.key} onClick={() => setTab(t.key)} style={{
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+            border: "none", cursor: "pointer", padding: "6px 16px", borderRadius: 10,
+            background: tab === t.key ? "#f0c24d18" : "transparent",
+            color: tab === t.key ? "#f0c24d" : "#4a6d82",
+            WebkitTapHighlightColor: "transparent",
+          }}>
+            <span style={{ fontSize: 21 }}>{t.icon}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3 }}>{t.label}</span>
           </button>
         ))}
       </nav>
-      <div style={{ height: "env(safe-area-inset-bottom, 0px)", background: "#091720" }} />
+      {/* iOS home indicator space */}
+      <div style={{ minHeight: "env(safe-area-inset-bottom, 6px)", background: "#070f16", flexShrink: 0 }} />
     </div>
   );
 }
 
 /* ═══════════════════ ITINERARY ═══════════════════ */
 function Itinerary({ items, setItems }) {
-  const [expanded, setExpanded] = useState(null);
-  const [editing, setEditing] = useState(null);
-  const [editFields, setEditFields] = useState({});
+  const [view, setView] = useState("list");
+  const [selId, setSelId] = useState(null);
+  const [editF, setEditF] = useState({});
+  const sel = items.find((i) => i.id === selId);
 
-  const startEdit = (e, item) => {
-    e.stopPropagation();
-    setEditing(item.id);
-    setEditFields({ subtitle: item.subtitle, dates: item.dates });
-  };
-
-  const saveEdit = (id) => {
-    setItems((prev) => prev.map((it) =>
-      it.id === id ? { ...it, subtitle: editFields.subtitle, dates: editFields.dates } : it
-    ));
-    setEditing(null);
-  };
-
-  return (
+  if (view === "list") return (
     <div style={{ padding: "0 16px 24px" }}>
-      <div style={S.summaryBar}>
-        <Pill icon="🌙" value="13 nuits" />
-        <Pill icon="🏝️" value="2 îles" />
-        <Pill icon="🚌" value="~14h trajet" />
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, justifyContent: "center", flexWrap: "wrap" }}>
+        <Pill icon="🌙" value="13 nuits" /><Pill icon="🏝️" value="2 îles" /><Pill icon="🚌" value="~14h trajet" />
       </div>
-      <div style={{ position: "relative", marginTop: 8 }}>
-        <div style={S.timelineLine} />
+      <div style={{ position: "relative" }}>
+        <div style={{ position: "absolute", left: 17, top: 10, bottom: 10, width: 2, background: "#152a3a", borderRadius: 1 }} />
         {items.map((item) => (
-          <div key={item.id}
-            onClick={() => { if (editing !== item.id) setExpanded(expanded === item.id ? null : item.id); }}
-            style={{ ...S.card, borderLeft: `3px solid ${item.color}` }}>
-            <div style={{ ...S.dot, background: item.color, boxShadow: `0 0 0 4px ${item.color}33` }} />
-
-            {editing === item.id ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }} onClick={(e) => e.stopPropagation()}>
-                <label style={S.editLabel}>{item.type === "stay" ? "Hébergement" : "Transport"}</label>
-                <input value={editFields.subtitle} onChange={(e) => setEditFields((f) => ({ ...f, subtitle: e.target.value }))} style={S.editInput} />
-                <label style={S.editLabel}>Dates</label>
-                <input value={editFields.dates} onChange={(e) => setEditFields((f) => ({ ...f, dates: e.target.value }))} style={S.editInput} />
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => saveEdit(item.id)} style={S.editSave}>Enregistrer</button>
-                  <button onClick={() => setEditing(null)} style={S.editCancel}>Annuler</button>
-                </div>
+          <div key={item.id} onClick={() => { setSelId(item.id); setView("detail"); }}
+            style={{
+              position: "relative", marginLeft: 36, marginBottom: 10, padding: "14px 14px",
+              background: "#0e2535", borderRadius: "0 14px 14px 0", cursor: "pointer",
+              border: "1px solid #162d40", borderLeft: `3px solid ${item.color}`,
+              WebkitTapHighlightColor: "transparent",
+            }}>
+            <div style={{ position: "absolute", left: -44, top: 19, width: 12, height: 12, borderRadius: "50%", background: item.color, boxShadow: `0 0 0 4px ${item.color}33` }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 24 }}>{item.icon}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#e0ebf2" }}>{item.title}</p>
+                <p style={{ margin: "2px 0 0", fontSize: 11, color: "#5e879e" }}>{item.subtitle}</p>
               </div>
-            ) : (
-              <>
-                <div style={S.cardHeader}>
-                  <span style={{ fontSize: 26 }}>{item.icon}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={S.cardTitle}>{item.title}</p>
-                    <p style={S.cardSub}>{item.subtitle}</p>
-                  </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <p style={S.cardDates}>{item.dates}</p>
-                    <p style={S.badge(item.type)}>{item.type === "stay" ? item.nights : item.duration}</p>
-                  </div>
-                </div>
-                {expanded === item.id && (
-                  <div style={S.cardDetails}>
-                    <p style={{ margin: 0, lineHeight: 1.55 }}>{item.details}</p>
-                    {item.type === "travel" && <div style={S.travelTag}>⏱️ Durée : {item.duration}</div>}
-                    {item.editable && (
-                      <button onClick={(e) => startEdit(e, item)} style={S.editBtn}>
-                        ✏️ Modifier {item.type === "stay" ? "hôtel" : "transport"} / dates
-                      </button>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <p style={{ margin: 0, fontSize: 11, color: "#5e879e", fontWeight: 600 }}>{item.dates}</p>
+                <span style={{
+                  display: "inline-block", marginTop: 4, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 8,
+                  color: item.type === "stay" ? "#f0c24d" : "#4ade80",
+                  background: item.type === "stay" ? "#f0c24d15" : "#4ade8015",
+                }}>{item.type === "stay" ? item.nights : item.duration}</span>
+              </div>
+            </div>
           </div>
         ))}
       </div>
     </div>
   );
+
+  if (view === "detail" && sel) return (
+    <div style={{ paddingBottom: 24 }}>
+      <Back onClick={() => { setView("list"); setSelId(null); }} label="Parcours" />
+      <div style={{ margin: "0 16px", padding: "20px 18px", background: "#0e2535", borderRadius: 18, border: `1px solid ${sel.color}55` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+          <span style={{ fontSize: 34 }}>{sel.icon}</span>
+          <div>
+            <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#e0ebf2" }}>{sel.title}</p>
+            <p style={{ margin: "3px 0 0", fontSize: 13, color: "#5e879e" }}>{sel.subtitle}</p>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+          <InfoBox label="DATES" value={sel.dates} color="#f0c24d" />
+          <InfoBox label={sel.type === "stay" ? "SÉJOUR" : "DURÉE"} value={sel.type === "stay" ? sel.nights : sel.duration} color="#4ade80" />
+        </div>
+        <p style={{ margin: "0 0 16px", fontSize: 14, color: "#8aa8bb", lineHeight: 1.6 }}>{sel.details}</p>
+        {sel.editable && (
+          <button onClick={() => { setEditF({ subtitle: sel.subtitle, dates: sel.dates }); setView("edit"); }}
+            style={{
+              width: "100%", padding: "12px", border: "1px solid #f0c24d44", borderRadius: 12,
+              background: "#f0c24d12", color: "#f0c24d", fontSize: 13, fontWeight: 700, cursor: "pointer",
+              WebkitTapHighlightColor: "transparent",
+            }}>
+            ✏️ Modifier {sel.type === "stay" ? "hôtel" : "transport"} / dates
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  if (view === "edit" && sel) return (
+    <div style={{ paddingBottom: 24 }}>
+      <Back onClick={() => setView("detail")} label="Retour" />
+      <div style={{ margin: "0 16px", padding: "20px 18px", background: "#0e2535", borderRadius: 18, border: "1px solid #162d40" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+          <span style={{ fontSize: 28 }}>{sel.icon}</span>
+          <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#e0ebf2" }}>{sel.title}</p>
+        </div>
+        <label style={S.label}>{sel.type === "stay" ? "Hébergement" : "Transport"}</label>
+        <input value={editF.subtitle} onChange={(e) => setEditF((f) => ({ ...f, subtitle: e.target.value }))} style={{ ...S.input, marginBottom: 14 }} />
+        <label style={S.label}>Dates</label>
+        <input value={editF.dates} onChange={(e) => setEditF((f) => ({ ...f, dates: e.target.value }))} style={{ ...S.input, marginBottom: 18 }} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => {
+            setItems((p) => p.map((i) => i.id === selId ? { ...i, subtitle: editF.subtitle, dates: editF.dates } : i));
+            setView("detail");
+          }} style={S.btnGold}>Enregistrer</button>
+          <button onClick={() => setView("detail")} style={S.btnGhost}>Annuler</button>
+        </div>
+      </div>
+    </div>
+  );
+  return null;
 }
 
 function Pill({ icon, value }) {
-  return <div style={S.pill}><span>{icon}</span><span style={{ fontWeight: 700, fontSize: 13 }}>{value}</span></div>;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#0e2535", padding: "7px 13px", borderRadius: 20, fontSize: 12, color: "#d4e4ed", border: "1px solid #162d40" }}>
+      <span>{icon}</span><span style={{ fontWeight: 700, fontSize: 12 }}>{value}</span>
+    </div>
+  );
+}
+
+function InfoBox({ label, value, color }) {
+  return (
+    <div style={{ flex: 1, padding: "10px", background: "#091720", borderRadius: 12, textAlign: "center" }}>
+      <p style={{ margin: 0, fontSize: 10, color: "#5e879e", fontWeight: 700, letterSpacing: 0.5 }}>{label}</p>
+      <p style={{ margin: "5px 0 0", fontSize: 15, fontWeight: 800, color }}>{value}</p>
+    </div>
+  );
 }
 
 /* ═══════════════════ PLANNING ═══════════════════ */
 function Planning({ plans, setPlans }) {
-  const [selectedDay, setSelectedDay] = useState(null);
-  const [newActivity, setNewActivity] = useState("");
+  const [selDay, setSelDay] = useState(null);
+  const [newAct, setNewAct] = useState("");
   const [newTime, setNewTime] = useState("");
 
-  const addActivity = (dayKey) => {
-    if (!newActivity.trim()) return;
-    const act = { id: Date.now(), time: newTime || null, text: newActivity.trim(), done: false };
-    setPlans((prev) => ({ ...prev, [dayKey]: [...(prev[dayKey] || []), act] }));
-    setNewActivity("");
-    setNewTime("");
+  const add = (dk) => {
+    if (!newAct.trim()) return;
+    setPlans((p) => ({ ...p, [dk]: [...(p[dk] || []), { id: Date.now(), time: newTime || null, text: newAct.trim(), done: false }] }));
+    setNewAct(""); setNewTime("");
   };
+  const remove = (dk, id) => setPlans((p) => ({ ...p, [dk]: (p[dk] || []).filter((a) => a.id !== id) }));
+  const toggle = (dk, id) => setPlans((p) => ({ ...p, [dk]: (p[dk] || []).map((a) => a.id === id ? { ...a, done: !a.done } : a) }));
 
-  const removeActivity = (dayKey, actId) => {
-    setPlans((prev) => ({ ...prev, [dayKey]: (prev[dayKey] || []).filter((a) => a.id !== actId) }));
-  };
+  if (!selDay) return (
+    <div style={{ padding: "0 16px 24px" }}>
+      <p style={{ margin: "0 0 14px", fontSize: 14, color: "#5e879e", textAlign: "center" }}>Planifiez vos journées entre amis</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {PLANNING_DAYS.map((d) => {
+          const c = (plans[d.key] || []).length;
+          return (
+            <button key={d.key} onClick={() => setSelDay(d.key)} style={{
+              display: "flex", alignItems: "center", gap: 10, padding: "13px 14px",
+              border: "1px solid #162d40", borderRadius: 14, background: "#0e2535",
+              cursor: "pointer", textAlign: "left", width: "100%",
+              WebkitTapHighlightColor: "transparent",
+            }}>
+              <span style={{ fontSize: 22, width: 30, textAlign: "center" }}>{d.icon}</span>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#e0ebf2" }}>{d.label}</p>
+                <p style={{ margin: "2px 0 0", fontSize: 11, color: "#5e879e" }}>{d.loc}</p>
+              </div>
+              {c > 0
+                ? <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", background: "#4ade8015", padding: "3px 10px", borderRadius: 8 }}>{c} activité{c > 1 ? "s" : ""}</span>
+                : <span style={{ fontSize: 11, color: "#3d6177" }}>À planifier</span>}
+              <span style={{ color: "#2d4f65", fontSize: 20 }}>›</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 
-  const toggleDone = (dayKey, actId) => {
-    setPlans((prev) => ({
-      ...prev,
-      [dayKey]: (prev[dayKey] || []).map((a) => a.id === actId ? { ...a, done: !a.done } : a),
-    }));
-  };
-
-  const dayActivities = selectedDay ? (plans[selectedDay] || []) : [];
+  const d = PLANNING_DAYS.find((x) => x.key === selDay);
+  const acts = (plans[selDay] || []).sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
 
   return (
-    <div style={{ padding: "0 14px 24px" }}>
-      <p style={{ margin: "0 0 14px", fontSize: 14, color: "#7a9aad", textAlign: "center", fontWeight: 500 }}>
-        Planifiez vos journées avec vos amis !
-      </p>
-
-      {!selectedDay ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {PLANNING_DAYS.map((d) => {
-            const count = (plans[d.key] || []).length;
-            return (
-              <button key={d.key} onClick={() => setSelectedDay(d.key)} style={S.dayRow}>
-                <span style={{ fontSize: 22, width: 32, textAlign: "center" }}>{d.icon}</span>
-                <div style={{ flex: 1 }}>
-                  <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#e8eef3" }}>{d.label}</p>
-                  <p style={{ margin: "1px 0 0", fontSize: 11.5, color: "#7a9aad" }}>{d.loc}</p>
-                </div>
-                {count > 0
-                  ? <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80", background: "#4ade8018", padding: "3px 9px", borderRadius: 8 }}>{count} activité{count > 1 ? "s" : ""}</span>
-                  : <span style={{ fontSize: 11, color: "#5a7e93" }}>À planifier</span>}
-                <span style={{ color: "#3b5e73", fontSize: 18 }}>›</span>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <div>
-          <button onClick={() => setSelectedDay(null)} style={S.backBtn}>‹ Retour</button>
-          {(() => {
-            const d = PLANNING_DAYS.find((x) => x.key === selectedDay);
-            return (
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, padding: "10px 14px", background: "#0f2a3a", borderRadius: 14, border: "1px solid #1a3548" }}>
-                <span style={{ fontSize: 30 }}>{d?.icon}</span>
-                <div>
-                  <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#e8eef3" }}>{d?.label} 2026</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 13, color: "#7a9aad" }}>{d?.loc}</p>
-                </div>
-              </div>
-            );
-          })()}
-
-          {dayActivities.length === 0 && (
-            <div style={{ textAlign: "center", padding: "28px 0" }}>
-              <span style={{ fontSize: 32 }}>📝</span>
-              <p style={{ margin: "8px 0 0", color: "#5a7e93", fontSize: 13 }}>Aucune activité.<br />Ajoutez votre premier programme !</p>
-            </div>
-          )}
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-            {dayActivities.sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99")).map((act) => (
-              <div key={act.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#0f2a3a", borderRadius: 12, border: "1px solid #1a3548", opacity: act.done ? 0.5 : 1 }}>
-                <button onClick={() => toggleDone(selectedDay, act.id)}
-                  style={{ width: 24, height: 24, borderRadius: 7, border: `2px solid ${act.done ? "#4ade80" : "#3b5e73"}`, background: act.done ? "#4ade80" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-                  {act.done && <span style={{ fontSize: 11, color: "#0c1e2b" }}>✓</span>}
-                </button>
-                <div style={{ flex: 1 }}>
-                  {act.time && <span style={{ fontSize: 11, fontWeight: 700, color: "#f0c24d", background: "#f0c24d18", padding: "1px 7px", borderRadius: 6, marginRight: 6 }}>{act.time}</span>}
-                  <p style={{ margin: 0, fontSize: 13.5, color: "#d4e4ed", textDecoration: act.done ? "line-through" : "none" }}>{act.text}</p>
-                </div>
-                <button onClick={() => removeActivity(selectedDay, act.id)} style={{ border: "none", background: "none", color: "#f8717188", fontSize: 14, cursor: "pointer" }}>✕</button>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ marginTop: 18, padding: "14px", background: "#091720", borderRadius: 14, border: "1px dashed #1e3a50" }}>
-            <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#7a9aad", textTransform: "uppercase", letterSpacing: 1 }}>Ajouter une activité</p>
-            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-              <input value={newTime} onChange={(e) => setNewTime(e.target.value)} placeholder="Heure" style={{ ...S.editInput, width: 90, flex: "none", fontSize: 13 }} />
-              <input value={newActivity} onChange={(e) => setNewActivity(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addActivity(selectedDay)} placeholder="Activité…" style={{ ...S.editInput, fontSize: 13 }} />
-            </div>
-            <button onClick={() => addActivity(selectedDay)} disabled={!newActivity.trim()}
-              style={{ width: "100%", padding: "10px", border: "none", borderRadius: 10, background: "linear-gradient(135deg, #f0c24d, #e8a838)", color: "#0c1e2b", fontSize: 13, fontWeight: 800, cursor: "pointer", opacity: newActivity.trim() ? 1 : 0.4 }}>
-              + Ajouter
-            </button>
+    <div style={{ paddingBottom: 24 }}>
+      <Back onClick={() => setSelDay(null)} label="Toutes les journées" />
+      <div style={{ padding: "0 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, padding: "12px 16px", background: "#0e2535", borderRadius: 14, border: "1px solid #162d40" }}>
+          <span style={{ fontSize: 28 }}>{d?.icon}</span>
+          <div>
+            <p style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#e0ebf2" }}>{d?.label} 2026</p>
+            <p style={{ margin: "2px 0 0", fontSize: 12, color: "#5e879e" }}>{d?.loc}</p>
           </div>
         </div>
-      )}
+
+        {acts.length === 0 && (
+          <div style={{ textAlign: "center", padding: "30px 0" }}>
+            <span style={{ fontSize: 30 }}>📝</span>
+            <p style={{ margin: "8px 0 0", color: "#3d6177", fontSize: 13 }}>Aucune activité.<br />Ajoutez votre programme !</p>
+          </div>
+        )}
+
+        {acts.map((act) => (
+          <div key={act.id} style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", marginBottom: 6,
+            background: "#0e2535", borderRadius: 12, border: "1px solid #162d40", opacity: act.done ? 0.45 : 1,
+          }}>
+            <button onClick={() => toggle(selDay, act.id)} style={{
+              width: 26, height: 26, borderRadius: 8, border: `2px solid ${act.done ? "#4ade80" : "#2d4f65"}`,
+              background: act.done ? "#4ade80" : "transparent", display: "flex", alignItems: "center",
+              justifyContent: "center", cursor: "pointer", flexShrink: 0,
+            }}>{act.done && <span style={{ fontSize: 12, color: "#0c1e2b", fontWeight: 800 }}>✓</span>}</button>
+            <div style={{ flex: 1 }}>
+              {act.time && <span style={{ fontSize: 11, fontWeight: 700, color: "#f0c24d", background: "#f0c24d15", padding: "2px 8px", borderRadius: 6, marginRight: 6 }}>{act.time}</span>}
+              <p style={{ margin: 0, fontSize: 14, color: "#d4e4ed", textDecoration: act.done ? "line-through" : "none" }}>{act.text}</p>
+            </div>
+            <button onClick={() => remove(selDay, act.id)} style={{ border: "none", background: "none", color: "#f87171", fontSize: 16, cursor: "pointer", padding: "6px" }}>✕</button>
+          </div>
+        ))}
+
+        <div style={{ marginTop: 16, padding: "16px", background: "#091720", borderRadius: 14, border: "1px dashed #1a3048" }}>
+          <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#5e879e", textTransform: "uppercase", letterSpacing: 1 }}>Nouvelle activité</p>
+          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            <input value={newTime} onChange={(e) => setNewTime(e.target.value)} placeholder="Heure" style={{ ...S.input, width: 80, flex: "none", fontSize: 13, padding: "10px 10px" }} />
+            <input value={newAct} onChange={(e) => setNewAct(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add(selDay)} placeholder="Ex: Snorkeling, temple…" style={{ ...S.input, fontSize: 13, padding: "10px 12px" }} />
+          </div>
+          <button onClick={() => add(selDay)} disabled={!newAct.trim()}
+            style={{ ...S.btnGold, opacity: newAct.trim() ? 1 : 0.35 }}>+ Ajouter</button>
+        </div>
+      </div>
     </div>
   );
 }
 
 /* ═══════════════════ CURRENCY ═══════════════════ */
 function Currency() {
-  const [amount, setAmount] = useState("");
-  const [target, setTarget] = useState("THB");
+  const [amt, setAmt] = useState("");
+  const [tgt, setTgt] = useState("THB");
   const [rates, setRates] = useState(DEFAULT_RATES);
-  const [online, setOnline] = useState(navigator.onLine);
-  const [lastUpdate, setLastUpdate] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [online, setOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
+  const [lastUp, setLastUp] = useState(null);
 
-  const fetchRates = useCallback(async () => {
-    setLoading(true);
+  const fetchR = useCallback(async () => {
     try {
-      const res = await fetch("https://open.er-api.com/v6/latest/EUR");
-      const data = await res.json();
-      if (data?.rates) {
-        setRates({ USD: data.rates.USD ?? DEFAULT_RATES.USD, THB: data.rates.THB ?? DEFAULT_RATES.THB });
-        setLastUpdate(new Date().toLocaleTimeString("fr-FR"));
-      }
+      const r = await fetch("https://open.er-api.com/v6/latest/EUR");
+      const d = await r.json();
+      if (d?.rates) { setRates({ USD: d.rates.USD || DEFAULT_RATES.USD, THB: d.rates.THB || DEFAULT_RATES.THB }); setLastUp(new Date().toLocaleTimeString("fr-FR")); }
     } catch {}
-    setLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchRates();
-    const goOn = () => { setOnline(true); fetchRates(); };
-    const goOff = () => setOnline(false);
-    window.addEventListener("online", goOn);
-    window.addEventListener("offline", goOff);
-    return () => { window.removeEventListener("online", goOn); window.removeEventListener("offline", goOff); };
-  }, [fetchRates]);
+    fetchR();
+    const on = () => { setOnline(true); fetchR(); };
+    const off = () => setOnline(false);
+    window.addEventListener("online", on); window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, [fetchR]);
 
-  const numVal = parseFloat(amount) || 0;
-  const converted = numVal * (rates[target] || 0);
+  const val = parseFloat(amt) || 0;
+  const conv = val * (rates[tgt] || 0);
   const press = (v) => {
-    if (v === "C") return setAmount("");
-    if (v === "⌫") return setAmount((a) => a.slice(0, -1));
-    if (v === "." && amount.includes(".")) return;
-    setAmount((a) => a + v);
+    if (v === "⌫") return setAmt((a) => a.slice(0, -1));
+    if (v === "." && amt.includes(".")) return;
+    setAmt((a) => a + v);
   };
-  const keys = ["1","2","3","4","5","6","7","8","9",".","0","⌫"];
 
   return (
-    <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", fontSize: 11, fontWeight: 600, color: online ? "#4ade80" : "#f87171", textTransform: "uppercase", letterSpacing: 1 }}>
+    <div style={{ padding: "0 16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* Online badge */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
         <div style={{ width: 7, height: 7, borderRadius: "50%", background: online ? "#4ade80" : "#f87171" }} />
-        <span>{online ? "En ligne" : "Hors ligne"}</span>
-        {loading && <span style={{ marginLeft: 6 }}>⟳</span>}
+        <span style={{ fontSize: 11, fontWeight: 600, color: online ? "#4ade80" : "#f87171", textTransform: "uppercase", letterSpacing: 1 }}>{online ? "En ligne" : "Hors ligne"}</span>
       </div>
-      <div style={{ background: "#0f2a3a", borderRadius: 20, padding: "18px 16px", border: "1px solid #1a3548" }}>
-        <div style={S.currRow}><div style={S.currLabel}><span style={{ fontSize: 22 }}>🇪🇺</span><span style={{ fontWeight: 800 }}>EUR</span></div><p style={S.currValue}>{amount || "0"}</p></div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "12px 0", color: "#3B6E8A" }}><div style={{ flex: 1, height: 1, background: "#1e3a50" }} /><span style={{ fontSize: 18 }}>⇅</span><div style={{ flex: 1, height: 1, background: "#1e3a50" }} /></div>
-        <div style={S.currRow}>
-          <div style={S.currLabel}>
-            <span style={{ fontSize: 22 }}>{target === "THB" ? "🇹🇭" : "🇺🇸"}</span>
+
+      {/* Display */}
+      <div style={{ background: "#0e2535", borderRadius: 18, padding: "18px 16px", border: "1px solid #162d40" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 22 }}>🇪🇺</span><span style={{ fontWeight: 800, fontSize: 16, color: "#d4e4ed" }}>EUR</span></div>
+          <p style={{ margin: 0, fontSize: 28, fontWeight: 800, color: "#f0c24d", fontVariantNumeric: "tabular-nums" }}>{amt || "0"}</p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "12px 0", color: "#2d4f65" }}>
+          <div style={{ flex: 1, height: 1, background: "#1a3048" }} /><span style={{ fontSize: 16 }}>⇅</span><div style={{ flex: 1, height: 1, background: "#1a3048" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 22 }}>{tgt === "THB" ? "🇹🇭" : "🇺🇸"}</span>
             <div style={{ display: "flex", gap: 6 }}>
-              {["THB","USD"].map((c) => <button key={c} onClick={() => setTarget(c)} style={{ border: "1px solid #1e3a50", padding: "4px 10px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", background: target === c ? "#f0c24d" : "#132d3f", color: target === c ? "#0c1e2b" : "#7a9aad" }}>{c}</button>)}
+              {["THB", "USD"].map((c) => (
+                <button key={c} onClick={() => setTgt(c)} style={{
+                  border: "1px solid #1a3048", padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700,
+                  cursor: "pointer", background: tgt === c ? "#f0c24d" : "#091720", color: tgt === c ? "#0c1e2b" : "#5e879e",
+                  WebkitTapHighlightColor: "transparent",
+                }}>{c}</button>
+              ))}
             </div>
           </div>
-          <p style={S.currValue}>{fmt(converted)}</p>
+          <p style={{ margin: 0, fontSize: 28, fontWeight: 800, color: "#f0c24d", fontVariantNumeric: "tabular-nums" }}>{fmt(conv)}</p>
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7 }}>
-        {keys.map((k) => <button key={k} onClick={() => press(k)} style={S.numKey}>{k}</button>)}
+
+      {/* Numpad */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+        {["1","2","3","4","5","6","7","8","9",".","0","⌫"].map((k) => (
+          <button key={k} onClick={() => press(k)} style={{
+            padding: "16px 0", border: "1px solid #162d40", borderRadius: 14,
+            background: "#0e2535", color: k === "⌫" ? "#f87171" : "#d4e4ed",
+            fontSize: 20, fontWeight: 700, cursor: "pointer",
+            WebkitTapHighlightColor: "transparent",
+          }}>{k}</button>
+        ))}
       </div>
-      <button onClick={() => press("C")} style={S.clearBtn}>Effacer</button>
+
+      {/* Clear */}
+      <button onClick={() => setAmt("")} style={{
+        padding: "12px", border: "1px solid #f8717133", borderRadius: 14, background: "#f8717110",
+        color: "#f87171", fontSize: 13, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: 1,
+      }}>Effacer</button>
+
+      {/* Rates */}
       <div style={{ textAlign: "center" }}>
-        <p style={S.rateText}>1 EUR = {fmt(rates.THB)} THB</p>
-        <p style={S.rateText}>1 EUR = {fmt(rates.USD)} USD</p>
-        {lastUpdate && <p style={{ ...S.rateText, opacity: 0.5, marginTop: 2 }}>Mis à jour : {lastUpdate}</p>}
+        <p style={{ margin: "1px 0", fontSize: 11, color: "#3d6177" }}>1 EUR = {fmt(rates.THB)} THB</p>
+        <p style={{ margin: "1px 0", fontSize: 11, color: "#3d6177" }}>1 EUR = {fmt(rates.USD)} USD</p>
+        {lastUp && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#2d4f65" }}>Mis à jour : {lastUp}</p>}
       </div>
     </div>
   );
@@ -356,112 +432,75 @@ function Currency() {
 
 /* ═══════════════════ CHAT ═══════════════════ */
 function Chat() {
-  const [messages, setMessages] = useState([
-    { role: "assistant", content: "Sawadee khrap! 🙏 Je suis ton assistant pour la Thaïlande 2026. Pose-moi toutes tes questions !" },
-  ]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [online, setOnline] = useState(navigator.onLine);
+  const [msgs, setMsgs] = useState([{ role: "assistant", content: "Sawadee khrap! 🙏 Pose-moi tes questions sur le voyage !" }]);
+  const [inp, setInp] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [online, setOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
   const endRef = useRef(null);
 
   useEffect(() => {
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
+    const on = () => setOnline(true); const off = () => setOnline(false);
+    window.addEventListener("online", on); window.addEventListener("offline", off);
     return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
-
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
   const send = async () => {
-    if (!input.trim() || loading) return;
-    const userMsg = { role: "user", content: input.trim() };
-    const newMsgs = [...messages, userMsg];
-    setMessages(newMsgs);
-    setInput("");
-    setLoading(true);
+    if (!inp.trim() || busy) return;
+    const newMsgs = [...msgs, { role: "user", content: inp.trim() }];
+    setMsgs(newMsgs); setInp(""); setBusy(true);
 
-    if (!online) {
-      setMessages((m) => [...m, { role: "assistant", content: "📡 Hors ligne. Reconnecte-toi pour le chat !" }]);
-      setLoading(false);
-      return;
-    }
+    if (!online) { setMsgs((m) => [...m, { role: "assistant", content: "📡 Hors ligne !" }]); setBusy(false); return; }
 
     try {
-      // Appel via la Netlify Function (clé API sécurisée côté serveur)
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const r = await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: newMsgs.map((m) => ({ role: m.role, content: m.content })) }),
       });
-      const data = await res.json();
-      const reply = data.content?.map((b) => b.type === "text" ? b.text : "").filter(Boolean).join("\n") || "Désolé, je n'ai pas pu répondre.";
-      setMessages((m) => [...m, { role: "assistant", content: reply }]);
-    } catch {
-      setMessages((m) => [...m, { role: "assistant", content: "⚠️ Erreur de connexion." }]);
-    }
-    setLoading(false);
+      const d = await r.json();
+      const reply = d.content?.map((b) => b.type === "text" ? b.text : "").filter(Boolean).join("\n") || "Désolé, erreur.";
+      setMsgs((m) => [...m, { role: "assistant", content: reply }]);
+    } catch { setMsgs((m) => [...m, { role: "assistant", content: "⚠️ Erreur de connexion." }]); }
+    setBusy(false);
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "0 12px" }}>
-      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, paddingBottom: 12, paddingTop: 4 }}>
-        {messages.map((m, i) => (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "0 14px" }}>
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, paddingBottom: 10 }}>
+        {msgs.map((m, i) => (
           <div key={i} style={{
-            maxWidth: "82%", padding: "10px 14px", fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word",
+            maxWidth: "80%", padding: "10px 14px", fontSize: 14, lineHeight: 1.5,
+            whiteSpace: "pre-wrap", wordBreak: "break-word",
             alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-            background: m.role === "user" ? "linear-gradient(135deg, #f0c24d, #e8a838)" : "#132d3f",
+            background: m.role === "user" ? "linear-gradient(135deg, #f0c24d, #e0a830)" : "#0e2535",
             color: m.role === "user" ? "#0c1e2b" : "#d4e4ed",
-            borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+            borderRadius: m.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
           }}>{m.content}</div>
         ))}
-        {loading && <div style={{ maxWidth: "82%", padding: "10px 14px", alignSelf: "flex-start", background: "#132d3f", color: "#7a9aad", borderRadius: "18px 18px 18px 4px" }}>●●●</div>}
+        {busy && <div style={{ padding: "10px 14px", alignSelf: "flex-start", background: "#0e2535", color: "#5e879e", borderRadius: "16px 16px 16px 4px" }}>●●●</div>}
         <div ref={endRef} />
       </div>
-      <div style={{ display: "flex", gap: 8, padding: "8px 0 4px", borderTop: "1px solid #1e3a50" }}>
-        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder={online ? "Pose ta question…" : "Hors ligne…"} disabled={!online}
-          style={{ flex: 1, padding: "11px 16px", border: "1px solid #1a3548", borderRadius: 24, background: "#0f2a3a", color: "#d4e4ed", fontSize: 14, outline: "none" }} />
-        <button onClick={send} disabled={loading || !input.trim()}
-          style={{ width: 42, height: 42, border: "none", borderRadius: "50%", background: "linear-gradient(135deg, #f0c24d, #e8a838)", color: "#0c1e2b", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, opacity: loading || !input.trim() ? 0.4 : 1 }}>➤</button>
+      <div style={{ display: "flex", gap: 8, padding: "10px 0 6px", borderTop: "1px solid #1a3048" }}>
+        <input value={inp} onChange={(e) => setInp(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
+          placeholder={online ? "Pose ta question…" : "Hors ligne"} disabled={!online}
+          style={{ flex: 1, padding: "12px 16px", border: "1px solid #162d40", borderRadius: 24, background: "#0e2535", color: "#d4e4ed", fontSize: 14, outline: "none" }} />
+        <button onClick={send} disabled={busy || !inp.trim()} style={{
+          width: 44, height: 44, border: "none", borderRadius: "50%",
+          background: "linear-gradient(135deg, #f0c24d, #e0a830)", color: "#0c1e2b",
+          fontSize: 18, fontWeight: 800, cursor: "pointer", display: "flex",
+          alignItems: "center", justifyContent: "center",
+          opacity: busy || !inp.trim() ? 0.35 : 1,
+          WebkitTapHighlightColor: "transparent",
+        }}>➤</button>
       </div>
     </div>
   );
 }
 
-/* ═══════════════════════ STYLES ═══════════════════════ */
+/* ═══════ SHARED STYLES ═══════ */
 const S = {
-  shell: { maxWidth: 430, margin: "0 auto", minHeight: "100vh", display: "flex", flexDirection: "column", background: "linear-gradient(180deg, #0c1e2b 0%, #0f2536 50%, #0c1e2b 100%)", fontFamily: "'Segoe UI','SF Pro Display',system-ui,sans-serif", color: "#d4e4ed" },
-  header: { display: "flex", alignItems: "center", gap: 14, padding: "16px 20px 12px", background: "linear-gradient(135deg, #0c1e2b, #132d3f)", borderBottom: "1px solid #1e3a50" },
-  headerTitle: { margin: 0, fontSize: 22, fontWeight: 800, background: "linear-gradient(135deg, #f0c24d, #e8a838)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" },
-  headerSub: { margin: 0, fontSize: 12, color: "#7a9aad", fontWeight: 500, letterSpacing: 1.2, textTransform: "uppercase" },
-  main: { flex: 1, overflowY: "auto", paddingTop: 14, paddingBottom: 6 },
-  nav: { display: "flex", justifyContent: "space-around", padding: "5px 4px 12px", background: "#091720", borderTop: "1px solid #1e3a50" },
-  navBtn: { display: "flex", flexDirection: "column", alignItems: "center", gap: 2, border: "none", cursor: "pointer", padding: "7px 12px", borderRadius: 12 },
-  summaryBar: { display: "flex", gap: 8, marginBottom: 14, justifyContent: "center" },
-  pill: { display: "flex", alignItems: "center", gap: 6, background: "#132d3f", padding: "7px 13px", borderRadius: 20, fontSize: 12, color: "#d4e4ed", border: "1px solid #1e3a50" },
-  timelineLine: { position: "absolute", left: 17, top: 10, bottom: 10, width: 2, background: "linear-gradient(180deg, #1e3a50, #0c1e2b)" },
-  card: { position: "relative", marginLeft: 34, marginBottom: 10, padding: "13px 15px", background: "#0f2a3a", borderRadius: "0 14px 14px 0", cursor: "pointer", border: "1px solid #1a3548", borderLeftWidth: 3 },
-  dot: { position: "absolute", left: -42, top: 20, width: 12, height: 12, borderRadius: "50%" },
-  cardHeader: { display: "flex", alignItems: "center", gap: 10 },
-  cardTitle: { margin: 0, fontSize: 14.5, fontWeight: 700, color: "#e8eef3" },
-  cardSub: { margin: "2px 0 0", fontSize: 11, color: "#7a9aad" },
-  cardDates: { margin: 0, fontSize: 11, color: "#7a9aad", fontWeight: 600 },
-  badge: (type) => ({ margin: "4px 0 0", fontSize: 10, fontWeight: 700, color: type === "stay" ? "#f0c24d" : "#4ade80", background: type === "stay" ? "#f0c24d18" : "#4ade8018", padding: "2px 8px", borderRadius: 8, display: "inline-block" }),
-  cardDetails: { marginTop: 10, padding: "10px 0 0", borderTop: "1px solid #1e3a50", fontSize: 13, color: "#9ab5c5" },
-  travelTag: { display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8, padding: "5px 12px", background: "#1a3548", borderRadius: 8, fontSize: 12, fontWeight: 600, color: "#4ade80" },
-  editBtn: { marginTop: 10, padding: "8px 14px", border: "1px solid #f0c24d44", borderRadius: 10, background: "#f0c24d12", color: "#f0c24d", fontSize: 12, fontWeight: 700, cursor: "pointer", width: "100%" },
-  editLabel: { margin: 0, fontSize: 11, fontWeight: 700, color: "#7a9aad", textTransform: "uppercase", letterSpacing: 0.8 },
-  editInput: { flex: 1, padding: "10px 14px", border: "1px solid #1e3a50", borderRadius: 10, background: "#091720", color: "#d4e4ed", fontSize: 14, outline: "none" },
-  editSave: { flex: 1, padding: "10px", border: "none", borderRadius: 10, background: "linear-gradient(135deg, #f0c24d, #e8a838)", color: "#0c1e2b", fontSize: 13, fontWeight: 800, cursor: "pointer" },
-  editCancel: { flex: 1, padding: "10px", border: "1px solid #1e3a50", borderRadius: 10, background: "transparent", color: "#7a9aad", fontSize: 13, fontWeight: 600, cursor: "pointer" },
-  dayRow: { display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", border: "1px solid #1a3548", borderRadius: 14, background: "#0f2a3a", cursor: "pointer", textAlign: "left", width: "100%" },
-  backBtn: { border: "none", background: "none", color: "#f0c24d", fontSize: 15, fontWeight: 700, cursor: "pointer", padding: "4px 0 12px" },
-  currRow: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  currLabel: { display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: "#d4e4ed" },
-  currValue: { margin: 0, fontSize: 26, fontWeight: 800, color: "#f0c24d", fontVariantNumeric: "tabular-nums" },
-  numKey: { padding: "14px 0", border: "1px solid #1a3548", borderRadius: 14, background: "#0f2a3a", color: "#d4e4ed", fontSize: 20, fontWeight: 700, cursor: "pointer" },
-  clearBtn: { padding: "10px", border: "1px solid #f8717133", borderRadius: 14, background: "#f8717115", color: "#f87171", fontSize: 13, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" },
-  rateText: { margin: "1px 0", fontSize: 11, color: "#5a8199", fontWeight: 500, fontVariantNumeric: "tabular-nums" },
+  label: { display: "block", margin: "0 0 4px", fontSize: 11, fontWeight: 700, color: "#5e879e", textTransform: "uppercase", letterSpacing: 0.8 },
+  input: { display: "block", width: "100%", padding: "12px 14px", border: "1px solid #1a3048", borderRadius: 12, background: "#091720", color: "#d4e4ed", fontSize: 14, outline: "none", WebkitAppearance: "none" },
+  btnGold: { width: "100%", flex: 1, padding: "12px", border: "none", borderRadius: 12, background: "linear-gradient(135deg, #f0c24d, #e0a830)", color: "#0c1e2b", fontSize: 14, fontWeight: 800, cursor: "pointer", WebkitTapHighlightColor: "transparent" },
+  btnGhost: { flex: 1, padding: "12px", border: "1px solid #1a3048", borderRadius: 12, background: "transparent", color: "#5e879e", fontSize: 14, fontWeight: 600, cursor: "pointer", WebkitTapHighlightColor: "transparent" },
 };
