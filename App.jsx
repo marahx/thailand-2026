@@ -99,9 +99,10 @@ export default function App() {
         {tab === "chat" && <Chat />}
       </main>
 
-      {/* Bottom Nav — always visible */}
+      {/* Bottom Nav — safe area integrated */}
       <nav style={{
-        display: "flex", justifyContent: "space-around", padding: "8px 6px 4px",
+        display: "flex", justifyContent: "space-around",
+        padding: "8px 6px calc(4px + env(safe-area-inset-bottom, 6px))",
         background: "#070f16", borderTop: "1px solid #1a3048", flexShrink: 0,
       }}>
         {tabs.map((t) => (
@@ -117,8 +118,6 @@ export default function App() {
           </button>
         ))}
       </nav>
-      {/* iOS home indicator space */}
-      <div style={{ minHeight: "env(safe-area-inset-bottom, 6px)", background: "#070f16", flexShrink: 0 }} />
     </div>
   );
 }
@@ -370,13 +369,10 @@ function Currency() {
 
   return (
     <div style={{ padding: "0 16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* Online badge */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
         <div style={{ width: 7, height: 7, borderRadius: "50%", background: online ? "#4ade80" : "#f87171" }} />
         <span style={{ fontSize: 11, fontWeight: 600, color: online ? "#4ade80" : "#f87171", textTransform: "uppercase", letterSpacing: 1 }}>{online ? "En ligne" : "Hors ligne"}</span>
       </div>
-
-      {/* Display */}
       <div style={{ background: "#0e2535", borderRadius: 18, padding: "18px 16px", border: "1px solid #162d40" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 22 }}>🇪🇺</span><span style={{ fontWeight: 800, fontSize: 16, color: "#d4e4ed" }}>EUR</span></div>
@@ -401,8 +397,6 @@ function Currency() {
           <p style={{ margin: 0, fontSize: 28, fontWeight: 800, color: "#f0c24d", fontVariantNumeric: "tabular-nums" }}>{fmt(conv)}</p>
         </div>
       </div>
-
-      {/* Numpad */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
         {["1","2","3","4","5","6","7","8","9",".","0","⌫"].map((k) => (
           <button key={k} onClick={() => press(k)} style={{
@@ -413,14 +407,10 @@ function Currency() {
           }}>{k}</button>
         ))}
       </div>
-
-      {/* Clear */}
       <button onClick={() => setAmt("")} style={{
         padding: "12px", border: "1px solid #f8717133", borderRadius: 14, background: "#f8717110",
         color: "#f87171", fontSize: 13, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: 1,
       }}>Effacer</button>
-
-      {/* Rates */}
       <div style={{ textAlign: "center" }}>
         <p style={{ margin: "1px 0", fontSize: 11, color: "#3d6177" }}>1 EUR = {fmt(rates.THB)} THB</p>
         <p style={{ margin: "1px 0", fontSize: 11, color: "#3d6177" }}>1 EUR = {fmt(rates.USD)} USD</p>
